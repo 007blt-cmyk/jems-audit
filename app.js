@@ -1,6 +1,6 @@
 // Login code length must match Supabase: Auth, Email, Email OTP Length.
 var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
-/* ביקור סניף · ג'מס · 2.0 · שלב 1: כניסה ושלד */
+/* ביקור סניף · JEM'S · 2.0 · שלב 1: כניסה ושלד. שלב 2: audit.js */
 (function () {
   'use strict';
   var C = window.JEMS_CONFIG;
@@ -9,7 +9,8 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   });
 
   var $app = document.getElementById('app');
-  var state = { me: null, roles: [], branches: [], tab: 'home', loginEmail: '', cooldown: 0 };
+  var state = { me: null, roles: [], branches: [], general: {}, tab: 'home', param: null, loginEmail: '', cooldown: 0 };
+  function A() { return window.JEMS_AUDIT; }
 
   var ROLE_NAMES = {
     super_admin: 'מנהל-על', exec_viewer: 'צופה הנהלה', auditor: 'מבקר',
@@ -152,14 +153,18 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
     return Promise.all([
       sb.from('profiles').select('id,email,full_name').eq('id', user.id).maybeSingle(),
       sb.from('user_roles').select('role,is_primary').eq('user_id', user.id),
-      sb.from('branches').select('id,code,name,ownership,sort').eq('active', true).order('sort')
+      sb.from('branches').select('id,code,name,ownership,sort,config').eq('active', true).order('sort'),
+      sb.from('settings').select('value').eq('key', 'general').maybeSingle()
     ]).then(function (res) {
       if (res[0].error || res[1].error || res[2].error) throw (res[0].error || res[1].error || res[2].error);
+      state.general = (res[3].data && res[3].data.value) || {};
+
       state.me = res[0].data || { id: user.id, email: user.email };
       var roles = res[1].data || [];
       roles.sort(function (a, b) { return (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0); });
       state.roles = roles.map(function (r) { return r.role; });
       state.branches = res[2].data || [];
+      A().saveMeta(user.id, { me: state.me, roles: state.roles, branches: state.branches, general: state.general });
     });
   }
 
@@ -180,20 +185,25 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
       navBtn('history', '🗂️', 'היסטוריה') + navBtn('me', '👤', 'אני') +
       '</nav>');
     document.querySelectorAll('.nav [data-tab]').forEach(function (b) { b.onclick = function () { go(b.dataset.tab); }; });
-    document.getElementById('newBtn').onclick = openNew;
+    document.getElementById('newBtn').onclick = function () { A().openNew(); };
     document.getElementById('whoBtn').onclick = function () { go('me'); };
     var sbtn = document.getElementById('setBtn'); if (sbtn) sbtn.onclick = function () { go('settings'); };
-    go(state.tab);
+    go(state.tab, state.param);
+    A().start();
   }
   function navBtn(id, i, l) { return '<button data-tab="' + id + '"><span class="i">' + i + '</span><span>' + l + '</span></button>'; }
-  function go(tab) {
-    state.tab = tab;
-    if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab);
+  function go(tab, param) {
+    state.tab = tab; state.param = param == null ? null : param;
+    var hash = '#' + tab + (state.param ? '/' + state.param : '');
+    if (location.hash !== hash) history.replaceState(null, '', hash);
+    document.body.classList.toggle('in-form', tab === 'audit');
     document.querySelectorAll('.nav [data-tab]').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     var m = document.getElementById('main'); if (!m) return;
     window.scrollTo(0, 0);
+    var av = A().views;
+    if (av[tab]) { av[tab](m, state.param); return; }
     ({ home: viewHome, trends: viewTrends, history: viewHistory, me: viewMe, settings: viewSettings }[tab] || viewHome)(m);
   }
 
@@ -208,38 +218,12 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   // ---------- views ----------
   function viewHome(m) {
     if (!state.roles.length) { m.innerHTML = '<h2 class="page">שלום ' + esc(displayName()) + '</h2>' + noRoleBox(); return; }
-    m.innerHTML = '<h2 class="page">שלום ' + esc(displayName()) + '</h2>' +
-      '<div class="stat-row"><div class="stat"><div class="n gold" id="stDraft">–</div><div class="l">ביקורות בעבודה</div></div>' +
-      '<div class="stat"><div class="n" id="stDef">–</div><div class="l">ליקויים פתוחים</div></div></div>' +
-      '<h3 class="sec">ביקורות בעבודה</h3><div id="drafts"></div>' +
-      '<h3 class="sec">ליקויים ארוכי טווח</h3><div id="defects"></div>' +
-      '<h3 class="sec">ביקורות אחרונות</h3><div id="recent"></div>';
-    var uid = state.me.id;
-    sb.from('audits').select('id,type,branch_id,started_at,status').eq('status', 'draft').eq('created_by', uid).order('started_at', { ascending: false }).then(function (r) {
-      var el = document.getElementById('drafts'); if (!el) return;
-      var rows = r.data || [];
-      document.getElementById('stDraft').textContent = rows.length;
-      el.innerHTML = rows.length ? list(rows) : emptyBox('📝', 'אין ביקורת פתוחה', 'ביקורת שהתחלת ועצרת תחכה כאן, ותמשיך מאותו מקום.', 'התחל ביקורת', 'emptyNew');
-      var b = document.getElementById('emptyNew'); if (b) b.onclick = openNew;
-    });
-    sb.from('long_term_defects').select('id,due_date', { count: 'exact' }).eq('status', 'open').then(function (r) {
-      var el = document.getElementById('defects'); if (!el) return;
-      var n = r.count || 0, today = new Date().toISOString().slice(0, 10);
-      var late = (r.data || []).filter(function (d) { return d.due_date && d.due_date < today; }).length;
-      document.getElementById('stDef').textContent = n;
-      el.innerHTML = n ? '<div class="item"><div class="t"><b>' + n + ' פתוחים' + (late ? ' · ' + late + ' באיחור' : '') + '</b><small>הרשימה המלאה תגיע בשלב 2</small></div></div>'
-        : emptyBox('✅', 'אין ליקויים פתוחים', 'ליקוי שצריך זמן לתקן יופיע כאן, עד שמישהו בסניף יסמן שטופל.', '', '');
-    });
-    sb.from('audits').select('id,type,branch_id,started_at,status,coverage').neq('status', 'draft').order('started_at', { ascending: false }).limit(5).then(function (r) {
-      var el = document.getElementById('recent'); if (!el) return;
-      var rows = r.data || [];
-      el.innerHTML = rows.length ? list(rows) : emptyBox('🗂️', 'עוד אין ביקורות שמורות', 'כשתסיים ביקורת ראשונה, היא תופיע כאן עם הציון.', '', '');
-    });
+    A().home(m);
   }
   function list(rows) {
     return '<div class="list">' + rows.map(function (a) {
-      return '<div class="item"><div class="t"><b>' + esc(TYPE_NAMES[a.type] || a.type) + ' · ' + esc(branchName(a.branch_id)) + '</b><small>' + fmtDate(a.started_at) + '</small></div>' +
-        '<span class="pill">' + (a.status === 'draft' ? 'בעבודה' : a.status === 'partial' ? 'חלקית' : 'הושלמה') + '</span></div>';
+      return '<button class="item tap" data-open="' + a.id + '"><div class="t"><b>' + esc(TYPE_NAMES[a.type] || a.type) + ' · ' + esc(branchName(a.branch_id)) + '</b><small>' + fmtDate(a.started_at) + '</small></div>' +
+        A().scorePill(a) + '</button>';
     }).join('') + '</div>';
   }
   function viewTrends(m) {
@@ -250,10 +234,11 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   function viewHistory(m) {
     m.innerHTML = '<h2 class="page">היסטוריה</h2><div id="hist"></div>';
     if (!state.roles.length) { document.getElementById('hist').innerHTML = noRoleBox(); return; }
-    sb.from('audits').select('id,type,branch_id,started_at,status').neq('status', 'draft').order('started_at', { ascending: false }).limit(50).then(function (r) {
+    sb.from('audits').select('id,type,branch_id,started_at,status,coverage,not_representative,result').neq('status', 'draft').order('started_at', { ascending: false }).limit(50).then(function (r) {
       var el = document.getElementById('hist'); if (!el) return;
       var rows = r.data || [];
       el.innerHTML = rows.length ? list(rows) : emptyBox('🗂️', 'ההיסטוריה ריקה', 'כל ביקורת שתסיים תישמר כאן. אפשר יהיה לסנן לפי סניף, סוג ותאריך.', 'התחל ביקורת', 'emptyNew');
+      A().bindOpen(el);
       var b = document.getElementById('emptyNew'); if (b) b.onclick = openNew;
     });
   }
@@ -299,16 +284,7 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
     if (has('mystery_internal')) t.push('mystery');
     return t;
   }
-  function openNew() {
-    var ok = allowedTypes();
-    var body = ok.length ? '<div class="types">' + TYPES.filter(function (t) { return ok.indexOf(t.id) >= 0; }).map(function (t) {
-      return '<button class="type" data-type="' + t.id + '"><span class="e">' + t.e + '</span><span class="t"><b>' + t.n + '</b><small>' + t.d + '</small></span><span class="pill">בקרוב</span></button>';
-    }).join('') + '</div>' : noRoleBox();
-    sheet('<h3>איזו ביקורת?</h3>' + body);
-    document.querySelectorAll('.type').forEach(function (b) {
-      b.onclick = function () { closeSheet(); toast(TYPE_NAMES[b.dataset.type] + ': הטופס נבנה בשלב הבא'); };
-    });
-  }
+  function openNew() { A().openNew(); }
   function sheet(inner) {
     closeSheet();
     var s = document.createElement('div'); s.className = 'scrim'; s.id = 'scrim';
@@ -327,13 +303,22 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
     if (!session) { booted = null; state.me = null; state.roles = []; renderEmail(); return; }
     if (booted === session.user.id) return;
     booted = session.user.id;
-    var t = (location.hash || '').slice(1); if (t) state.tab = t;
+    var t = (location.hash || '').slice(1).split('/'); if (t[0]) { state.tab = t[0]; state.param = t[1] || null; }
     loadMe(session.user).then(renderShell).catch(function () {
+      // offline: use the last profile, roles and branches saved on this phone
+      var c = A().loadMeta(session.user.id);
+      if (c) { state.me = c.me; state.roles = c.roles; state.branches = c.branches; state.general = c.general || {}; renderShell(); return; }
       booted = null;
       h('<div class="login">' + brand() + '<div class="card">' + emptyBox('📡', 'לא הצלחנו לטעון', 'בדוק חיבור לרשת ונסה שוב.', 'נסה שוב', 'retry') + '</div></div>');
       document.getElementById('retry').onclick = function () { onSession(session); };
     });
   }
+  window.JEMS = {
+    sb: sb, state: state, esc: esc, h: h, toast: toast, sheet: sheet, closeSheet: closeSheet, go: go,
+    branchName: branchName, has: has, isAdmin: isAdmin, displayName: displayName, fmtDate: fmtDate,
+    emptyBox: emptyBox, noRoleBox: noRoleBox, list: list, allowedTypes: allowedTypes,
+    TYPE_NAMES: TYPE_NAMES, TYPES: TYPES
+  };
   sb.auth.onAuthStateChange(function (_ev, session) { setTimeout(function () { onSession(session); }, 0); });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
