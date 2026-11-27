@@ -1,3 +1,5 @@
+// Login code length must match Supabase: Auth, Email, Email OTP Length.
+var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
 /* ביקור סניף · ג'מס · 2.0 · שלב 1: כניסה ושלד */
 (function () {
   'use strict';
@@ -70,7 +72,7 @@
       '<form class="card" id="emailForm" novalidate>' +
       '<label class="field"><span>המייל שלך</span>' +
       '<input class="input ltr" id="email" type="email" inputmode="email" autocomplete="email" placeholder="name@gmail.com" value="' + esc(state.loginEmail) + '" required>' +
-      '<div class="hint">נשלח אליך קוד של 6 ספרות. בלי סיסמה.</div></label>' +
+      '<div class="hint">נשלח אליך קוד של ' + CODE_LEN + ' ספרות. בלי סיסמה.</div></label>' +
       '<div class="err" id="err">' + esc(err || '') + '</div>' +
       '<button class="btn btn-primary" id="sendBtn" type="submit">שלח לי קוד</button>' +
       '</form>' +
@@ -110,7 +112,7 @@
       '<form class="card" id="codeForm" novalidate>' +
       '<p class="sent-to">שלחנו קוד אל <b>' + esc(state.loginEmail) + '</b></p>' +
       '<label class="field"><span>הקוד מהמייל</span>' +
-      '<input class="input code" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="······" required>' +
+      '<input class="input code" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="' + CODE_LEN + '" pattern="[0-9]*" placeholder="' + '·'.repeat(CODE_LEN) + '" required>' +
       '<div class="hint">לא מגיע? בדוק גם בקידומי מכירות ובספאם.</div></label>' +
       '<div class="err" id="err">' + esc(err || '') + '</div>' +
       '<button class="btn btn-primary" id="goBtn" type="submit">היכנס</button>' +
@@ -120,9 +122,9 @@
     var inp = document.getElementById('code');
     setTimeout(function () { inp.focus(); }, 50);
     inp.addEventListener('input', function () {
-      inp.value = inp.value.replace(/\D/g, '').slice(0, 6);
+      inp.value = inp.value.replace(/\D/g, '').slice(0, CODE_LEN);
       document.getElementById('err').textContent = '';
-      if (inp.value.length === 6) document.getElementById('codeForm').requestSubmit();
+      if (inp.value.length === CODE_LEN) document.getElementById('codeForm').requestSubmit();
     });
     document.getElementById('backBtn').onclick = function () { renderEmail(); };
     document.getElementById('resendBtn').onclick = function () {
@@ -131,7 +133,7 @@
     };
     document.getElementById('codeForm').addEventListener('submit', function (e) {
       e.preventDefault();
-      if (inp.value.length !== 6) { document.getElementById('err').textContent = 'הקוד הוא 6 ספרות.'; return; }
+      if (inp.value.length !== CODE_LEN) { document.getElementById('err').textContent = 'הקוד הוא ' + CODE_LEN + ' ספרות.'; return; }
       var b = document.getElementById('goBtn'); b.disabled = true; b.innerHTML = '<span class="spin"></span> נכנס…';
       sb.auth.verifyOtp({ email: state.loginEmail, token: inp.value, type: 'email' }).then(function (r) {
         if (r.error) { b.disabled = false; b.textContent = 'היכנס'; document.getElementById('err').textContent = authError(r.error); inp.select(); }
