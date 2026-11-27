@@ -44,8 +44,8 @@ button { cursor: pointer; }
   min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
   padding: calc(32px + var(--safe-t)) 24px 32px; max-width: 440px; margin: 0 auto;
 }
-.login .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 36px; }
-.login .brand h1 { margin: 0; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; }
+.login .brand { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-bottom: 36px; }
+.login .brand h1 { margin: 6px 0 0; font-size: 26px; line-height: 1.15; letter-spacing: -.01em; }
 .login .brand small { display: block; color: var(--muted); font-size: 14px; font-weight: 500; }
 .login .glow {
   position: fixed; inset: -30vh -30vw auto auto; width: 80vw; height: 70vh; pointer-events: none; z-index: -1;
@@ -186,3 +186,13 @@ h3.sec { font-size: 15px; color: var(--muted); font-weight: 700; margin: 26px 0 
 }
 #toast.show { opacity: 1; transform: none; }
 .ltr { direction: ltr; unicode-bidi: isolate; }
+
+/* ---------- JEMS wordmark ---------- */
+.wordmark {
+  direction: ltr; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-weight: 900;
+  font-size: 44px; line-height: 1; letter-spacing: .14em; padding-left: .14em;
+  background: linear-gradient(120deg, #c9932f, #e0b45c 45%, #f0922f);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.wordmark.sm { font-size: 19px; letter-spacing: .12em; flex: none; }
+[data-theme="light"] .wordmark { background-image: linear-gradient(120deg, #8f5f14, #b07a1e 45%, #c0610f); }

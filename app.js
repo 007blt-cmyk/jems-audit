@@ -65,7 +65,7 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
 
   // ---------- login ----------
   function brand() {
-    return '<div class="brand"><div class="mark">J</div><div><h1>ביקור סניף</h1><small>ג\'מס · מערכת ביקורת ותפעול</small></div></div>';
+    return '<div class="brand"><div class="wordmark" lang="en">JEMS</div><h1>ביקור סניף</h1><small>מערכת ביקורת ותפעול</small></div>';
   }
   function renderEmail(err) {
     h('<div class="login"><div class="glow"></div>' + brand() +
@@ -163,7 +163,7 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   function renderShell() {
     var role = state.roles[0] ? ROLE_NAMES[state.roles[0]] : 'בלי הרשאה עדיין';
     h('<header class="topbar">' +
-      '<div class="mark" aria-hidden="true">J</div>' +
+      '<div class="wordmark sm" lang="en" aria-label="JEMS">JEMS</div>' +
       '<button class="who" id="whoBtn" aria-label="החשבון שלי"><b>' + esc(displayName()) + '</b><small>' + esc(role) + '</small></button>' +
       themeBtn() +
       (isAdmin() ? '<button class="icon-btn" id="setBtn" aria-label="הגדרות">⚙️</button>' : '') +
