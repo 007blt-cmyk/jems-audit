@@ -187,12 +187,10 @@ h3.sec { font-size: 15px; color: var(--muted); font-weight: 700; margin: 26px 0 
 #toast.show { opacity: 1; transform: none; }
 .ltr { direction: ltr; unicode-bidi: isolate; }
 
-/* ---------- JEMS wordmark ---------- */
-.wordmark {
-  direction: ltr; font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; font-weight: 900;
-  font-size: 44px; line-height: 1; letter-spacing: .14em; padding-left: .14em;
-  background: linear-gradient(120deg, #c9932f, #e0b45c 45%, #f0922f);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.wordmark.sm { font-size: 19px; letter-spacing: .12em; flex: none; }
-[data-theme="light"] .wordmark { background-image: linear-gradient(120deg, #8f5f14, #b07a1e 45%, #c0610f); }
+/* ---------- JEM'S logo ---------- */
+.ink-light { display: none; }
+[data-theme="dark"] .ink-dark { display: none; }
+[data-theme="dark"] .ink-light { display: block; }
+.ink.logo { width: 168px; height: auto; margin-bottom: 10px; }
+.topmark { flex: none; display: grid; place-items: center; width: 40px; height: 40px; }
+.ink.sun { width: 40px; height: auto; }

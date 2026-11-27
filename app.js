@@ -64,8 +64,13 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   }
 
   // ---------- login ----------
+  // Logo comes in two inks: dark for day mode, light for night mode. CSS shows the right one.
+  function logoImg(name, alt) {
+    return '<img class="ink ink-dark ' + name + '" src="icons/' + name + '-dark-ink.png" alt="' + alt + '">' +
+      '<img class="ink ink-light ' + name + '" src="icons/' + name + '-light-ink.png" alt="" aria-hidden="true">';
+  }
   function brand() {
-    return '<div class="brand"><div class="wordmark" lang="en">JEMS</div><h1>ביקור סניף</h1><small>מערכת ביקורת ותפעול</small></div>';
+    return '<div class="brand">' + logoImg('logo', 'JEM\'S Beer Factory') + '<h1>ביקור סניף</h1><small>מערכת ביקורת ותפעול</small></div>';
   }
   function renderEmail(err) {
     h('<div class="login"><div class="glow"></div>' + brand() +
@@ -163,7 +168,7 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   function renderShell() {
     var role = state.roles[0] ? ROLE_NAMES[state.roles[0]] : 'בלי הרשאה עדיין';
     h('<header class="topbar">' +
-      '<div class="wordmark sm" lang="en" aria-label="JEMS">JEMS</div>' +
+      '<span class="topmark">' + logoImg('sun', 'JEM\'S') + '</span>' +
       '<button class="who" id="whoBtn" aria-label="החשבון שלי"><b>' + esc(displayName()) + '</b><small>' + esc(role) + '</small></button>' +
       themeBtn() +
       (isAdmin() ? '<button class="icon-btn" id="setBtn" aria-label="הגדרות">⚙️</button>' : '') +
