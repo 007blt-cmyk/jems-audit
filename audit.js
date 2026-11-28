@@ -272,6 +272,7 @@
       c.onclick = function () { document.querySelectorAll('#shChips .chip').forEach(function (x) { x.classList.toggle('on', x === c); }); };
     });
     var g = $('goAudit'); if (g) g.onclick = function () {
+      if (g.disabled) return; g.disabled = true; g.innerHTML = '<span class="spin"></span> פותח…';
       var sh = document.querySelector('#shChips .chip.on');
       var mgr = $('mgrIn').value.trim(); lsSet(key('lastmgr-' + bid), mgr);
       startAudit(type, bid, sh ? sh.dataset.s : '', mgr);
@@ -391,7 +392,7 @@
     var res = compute(F.row);
     var note = (F.row.data.depts[d.id] || {}).note || '';
     el.innerHTML = '<div class="dhead"><h2>' + esc(d.icon || '') + ' ' + esc(d.name) + '</h2><span id="deptScore">' + deptScoreHtml(res.depts[d.id]) + '</span></div>' +
-      '<button class="btn btn-soft" id="allOk">✓ הכל תקין במחלקה</button>' +
+      (allOkIds(d).length ? '<button class="btn btn-line" id="allOk">↺ בטל "הכל תקין"</button>' : '<button class="btn btn-soft" id="allOk">✓ הכל תקין במחלקה</button>') +
       '<div class="items">' + d.items.map(itemHtml).join('') + '</div>' +
       '<label class="field"><span>הערה למחלקה</span><textarea class="input ta" id="deptNote" rows="2" placeholder="לא חובה">' + esc(note) + '</textarea></label>' +
       '<div class="fnav">' +
@@ -399,9 +400,18 @@
       (F.dept < depts().length - 1 ? '<button class="btn btn-primary" id="nextD">הבאה ←</button>' : '<button class="btn btn-primary" id="endD">סיום הביקורת</button>') +
       '</div>';
     $('allOk').onclick = function () {
-      var n = 0;
-      d.items.forEach(function (it) { if (it.kind === 'check' && !itemResult(it, F.row.data.items[it.id])) { rec(it.id).r = 'ok'; n++; } });
+      var dd = F.row.data.depts[d.id] = F.row.data.depts[d.id] || {};
+      var undo = allOkIds(d);
+      if (undo.length) {
+        // undo: clear only what "all ok" marked and nobody changed since
+        undo.forEach(function (id) { var r = F.row.data.items[id]; if (r) { r.r = null; } });
+        dd.allok = [];
+        save(F.row); renderBody(); refreshChrome(); toast('בוטל. ' + undo.length + ' סעיפים חזרו ללא סימון'); return;
+      }
+      var n = 0, ids = [];
+      d.items.forEach(function (it) { if (it.kind === 'check' && !itemResult(it, F.row.data.items[it.id])) { rec(it.id).r = 'ok'; ids.push(it.id); n++; } });
       if (!n) { toast('כל הסעיפים כבר סומנו'); return; }
+      dd.allok = ids;
       save(F.row); renderBody(); refreshChrome();
       var temps = d.items.filter(function (it) { return it.kind === 'temp' && !itemResult(it, F.row.data.items[it.id]); }).length;
       toast(n + ' סומנו תקין' + (temps ? ' · נשארו ' + temps + ' מדידות טמפרטורה' : ''));
@@ -412,6 +422,10 @@
     var en = $('endD'); if (en) en.onclick = openFinish;
     bindItems(el, d);
     loadThumbs(el);
+  }
+  function allOkIds(d) {
+    var dd = F.row.data.depts[d.id] || {};
+    return (dd.allok || []).filter(function (id) { var r = F.row.data.items[id]; return r && r.r === 'ok'; });
   }
   function itemHtml(it) {
     var r = F.row.data.items[it.id] || {}, res = itemResult(it, r);
@@ -430,15 +444,15 @@
     var flag = r.flag;
     var extra = '';
     if (res === 'bad') {
-      extra = '<div class="badbox">' +
-        (flag ? '<div class="flagline">🚩 <b>' + esc(flag.text) + '</b>' + (flag.owner ? ' · ' + esc(flag.owner) : '') +
-          '<span class="pill ' + (flag.long ? 'pill-warn' : 'pill-ok') + '">' + (flag.long ? '⏳ ארוך טווח' : '✔️ טופל במקום') + '</span></div>' : '') +
-        '<div class="row2"><button class="btn btn-line btn-sm" data-flag="' + it.id + '">' + (flag ? '✏️ ערוך דגל' : '🚩 דגל: מה לתקן') + '</button></div></div>';
+      extra = flag ? '<button class="flagline" data-flag="' + it.id + '">🚩 <b>' + esc(flag.text) + '</b>' + (flag.owner ? ' · ' + esc(flag.owner) : '') +
+          '<span class="pill ' + (flag.long ? 'pill-warn' : 'pill-ok') + '">' + (flag.long ? '⏳ ארוך טווח' : '✔️ טופל במקום') + '</span></button>'
+        : '<button class="link flaglink" data-flag="' + it.id + '">🚩 הוסף דגל · לא חובה</button>';
     }
     var photos = (r.photos || []).map(function (p) { return '<img class="thumb" data-path="' + esc(p) + '" alt="תמונה">'; }).join('');
     return '<div class="it' + (res ? ' ans ' + res : '') + '" id="it-' + it.id + '"><div class="il"><span>' + esc(it.label) + '</span>' + badge + '</div>' + ctl +
-      '<div class="iact"><label class="cam" aria-label="צילום">📷<input type="file" accept="image/*" capture="environment" data-photo="' + it.id + '" hidden></label>' +
-      '<div class="thumbs">' + photos + '</div></div>' + extra + '</div>';
+      '<div class="iact">' + extra + '<label class="cam" id="cam-' + it.id + '" aria-label="צילום לסעיף">📷' + ((r.photos || []).length ? '<i>' + r.photos.length + '</i>' : '') +
+      '<input type="file" accept="image/*" data-photo="' + it.id + '" hidden></label>' +
+      '<div class="thumbs">' + photos + '</div></div></div>';
   }
   function redrawItem(it) {
     var el = $('it-' + it.id); if (!el || !el.parentNode) return;
@@ -454,7 +468,6 @@
         r.r = r.r === b.dataset.set ? null : b.dataset.set; // tap again to clear
         if (r.r !== 'bad' && r.flag && !r.flag.long) delete r.flag;
         save(F.row); redrawItem(it); refreshChrome();
-        if (r.r === 'bad' && !r.flag) openFlag(it);
       };
     });
     root.querySelectorAll('[data-temp]').forEach(function (inp) {
@@ -466,7 +479,7 @@
         if (String(r.v == null ? '' : r.v) === v && r.r !== 'na') return;
         if (v === '' || isNaN(Number(v))) { delete r.v; if (r.r !== 'na') r.r = null; } else { r.v = Number(v); r.r = null; }
         save(F.row); refreshChrome();
-        setTimeout(function () { if (!F) return; redrawItem(it); if (itemResult(it, r) === 'bad') { toast('חריגה מהסף: ' + v + '°'); if (!r.flag) openFlag(it); } }, 0);
+        setTimeout(function () { if (!F) return; redrawItem(it); if (itemResult(it, r) === 'bad') toast('חריגה מהסף: ' + v + '°'); }, 0);
       };
     });
     root.querySelectorAll('[data-na]').forEach(function (b) {
@@ -551,29 +564,50 @@
 
   // ---------- photos ----------
   function compress(file) {
-    return new Promise(function (res, rej) {
-      var img = new Image(), u = URL.createObjectURL(file);
-      img.onload = function () {
-        var max = 1280, w = img.naturalWidth, hh = img.naturalHeight, k = Math.min(1, max / Math.max(w, hh));
-        var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(hh * k);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        URL.revokeObjectURL(u);
-        c.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.72);
-      };
-      img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('img')); };
-      img.src = u;
-    });
-  }
-  function addPhoto(it, file) {
-    toast('מכווץ תמונה…');
-    compress(file).then(function (blob) {
-      var path = F.row.branch_id + '/' + F.row.id + '/' + it.id + '-' + Date.now() + '.jpg';
-      return idbPut(path, blob).then(function () {
-        var q = photoq(); q.push(path); setPhotoq(q);
-        var r = rec(it.id); (r.photos = r.photos || []).push(path);
-        save(F.row); redrawItem(it); toast('התמונה נשמרה');
+    var max = 1280;
+    function draw(src, w, hh) {
+      var k = Math.min(1, max / Math.max(w, hh));
+      var c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(hh * k);
+      c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+      return new Promise(function (res, rej) { c.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/jpeg', 0.72); });
+    }
+    var viaImg = function () {
+      return new Promise(function (res, rej) {
+        var img = new Image(), u = URL.createObjectURL(file);
+        img.onload = function () { URL.revokeObjectURL(u); draw(img, img.naturalWidth, img.naturalHeight).then(res, rej); };
+        img.onerror = function () { URL.revokeObjectURL(u); rej(new Error('img')); };
+        img.src = u;
       });
-    }).catch(function () { toast('לא הצלחנו לשמור את התמונה. נסה שוב.'); });
+    };
+    var p = window.createImageBitmap ? createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (bm) { return draw(bm, bm.width, bm.height); }).catch(viaImg) : viaImg();
+    // if the phone cannot shrink it, keep the original (up to 4.5MB)
+    return p.catch(function () { if (file.size && file.size < 4.5 * 1024 * 1024) return file; throw new Error('big'); });
+  }
+  function camBusy(id, on) { var c = $('cam-' + id); if (c) c.classList.toggle('busy', on); }
+  function addPhoto(it, file) {
+    var row = F.row, itemId = it.id;
+    camBusy(itemId, true);
+    compress(file).then(function (blob) {
+      var path = row.branch_id + '/' + row.id + '/' + itemId + '-' + Date.now() + '.jpg';
+      var attach = function () {
+        var r = row.data.items[itemId] || (row.data.items[itemId] = {}); (r.photos = r.photos || []).push(path);
+        save(row); if (F && F.row === row) redrawItem(it);
+        toast('📷 התמונה נשמרה');
+      };
+      // phone storage first; if the phone refuses, send straight to the cloud
+      return idbPut(path, blob).then(function () {
+        var q = photoq(); q.push(path); setPhotoq(q); attach();
+      }, function () {
+        if (!navigator.onLine) throw new Error('nostore');
+        return sb.storage.from('photos').upload(path, blob, { upsert: true, contentType: 'image/jpeg' }).then(function (r) {
+          if (r.error) throw r.error; attach();
+        });
+      });
+    }).catch(function (e) {
+      camBusy(itemId, false);
+      var m = (e && e.message) || '';
+      toast(m === 'big' ? 'התמונה גדולה מדי. נסה שוב, או צלם ברזולוציה נמוכה יותר.' : m === 'nostore' ? 'אין מקום בטלפון ואין קליטה. נסה שוב כשיש קליטה.' : 'התמונה לא נשמרה. נסה שוב.');
+    });
   }
   var urlCache = {};
   function photoUrl(path) {

@@ -250,21 +250,23 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
       '<div>מייל: <b class="ltr">' + esc(state.me.email) + '</b></div>' +
       '<div>תפקיד: <b>' + esc(state.roles.map(function (r) { return ROLE_NAMES[r]; }).join(', ') || 'אין עדיין') + '</b></div>' +
       '<div>סניפים: <b>' + esc(br) + '</b></div></div>' +
+      (state.me.full_name && !state.editName ? '<button class="btn btn-line" id="editName">✏️ שנה את השם בדוחות</button></div>' :
       '<label class="field"><span>השם שיופיע בדוחות</span><input class="input" id="nameIn" value="' + esc(state.me.full_name || '') + '" placeholder="למשל: תומר בר-לוי" autocomplete="name"></label>' +
-      '<button class="btn btn-primary" id="saveName">שמור שם</button></div>' +
+      '<button class="btn btn-primary" id="saveName">שמור שם</button></div>') +
       '<h3 class="sec">כללי</h3><div class="menu">' +
       '<button class="btn" id="themeRow">' + (theme() === 'light' ? '🌙 עבור למצב לילה' : '☀️ עבור למצב יום') + '</button>' +
       '<button class="btn" id="outBtn">🚪 התנתק</button></div>' +
       '<p style="color:var(--faint);font-size:13px;text-align:center;margin-top:24px">גרסה ' + esc(C.version) + '</p>';
     document.getElementById('themeRow').onclick = function () { setTheme(theme() === 'light' ? 'dark' : 'light'); viewMe(m); };
     document.getElementById('outBtn').onclick = function () { sb.auth.signOut(); };
+    var en = document.getElementById('editName'); if (en) { en.onclick = function () { state.editName = true; viewMe(m); }; return; }
     document.getElementById('saveName').onclick = function () {
       var v = document.getElementById('nameIn').value.trim(); if (!v) { toast('כתוב שם קודם'); return; }
       var btn = this; btn.disabled = true;
       sb.from('profiles').update({ full_name: v }).eq('id', state.me.id).then(function (r) {
         btn.disabled = false;
         if (r.error) { toast('השמירה לא הצליחה. נסה שוב.'); return; }
-        state.me.full_name = v; toast('השם נשמר'); renderShell();
+        state.me.full_name = v; state.editName = false; toast('השם נשמר'); renderShell();
       });
     };
   }
