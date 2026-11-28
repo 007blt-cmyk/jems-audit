@@ -154,17 +154,18 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
       sb.from('profiles').select('id,email,full_name').eq('id', user.id).maybeSingle(),
       sb.from('user_roles').select('role,is_primary').eq('user_id', user.id),
       sb.from('branches').select('id,code,name,ownership,sort,config').eq('active', true).order('sort'),
-      sb.from('settings').select('value').eq('key', 'general').maybeSingle()
+      sb.from('settings').select('key,value').in('key', ['general', 'tasting'])
     ]).then(function (res) {
       if (res[0].error || res[1].error || res[2].error) throw (res[0].error || res[1].error || res[2].error);
-      state.general = (res[3].data && res[3].data.value) || {};
+      var st = {}; (res[3].data || []).forEach(function (x) { st[x.key] = x.value; });
+      state.general = st.general || {}; state.tasting = st.tasting || {};
 
       state.me = res[0].data || { id: user.id, email: user.email };
       var roles = res[1].data || [];
       roles.sort(function (a, b) { return (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0); });
       state.roles = roles.map(function (r) { return r.role; });
       state.branches = res[2].data || [];
-      A().saveMeta(user.id, { me: state.me, roles: state.roles, branches: state.branches, general: state.general });
+      A().saveMeta(user.id, { me: state.me, roles: state.roles, branches: state.branches, general: state.general, tasting: state.tasting });
     });
   }
 
@@ -197,6 +198,7 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
     var hash = '#' + tab + (state.param ? '/' + state.param : '');
     if (location.hash !== hash) history.replaceState(null, '', hash);
     document.body.classList.toggle('in-form', tab === 'audit');
+    document.body.classList.remove('in-tasting');
     document.querySelectorAll('.nav [data-tab]').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
@@ -253,12 +255,14 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
       (state.me.full_name && !state.editName ? '<button class="btn btn-line" id="editName">✏️ שנה את השם בדוחות</button></div>' :
       '<label class="field"><span>השם שיופיע בדוחות</span><input class="input" id="nameIn" value="' + esc(state.me.full_name || '') + '" placeholder="למשל: תומר בר-לוי" autocomplete="name"></label>' +
       '<button class="btn btn-primary" id="saveName">שמור שם</button></div>') +
+      (state.roles.length ? '<h3 class="sec">כלים</h3><div class="menu"><button class="btn" id="libBtn">🍽️ ספריית מנות</button></div>' : '') +
       '<h3 class="sec">כללי</h3><div class="menu">' +
       '<button class="btn" id="themeRow">' + (theme() === 'light' ? '🌙 עבור למצב לילה' : '☀️ עבור למצב יום') + '</button>' +
       '<button class="btn" id="outBtn">🚪 התנתק</button></div>' +
       '<p style="color:var(--faint);font-size:13px;text-align:center;margin-top:24px">גרסה ' + esc(C.version) + '</p>';
     document.getElementById('themeRow').onclick = function () { setTheme(theme() === 'light' ? 'dark' : 'light'); viewMe(m); };
     document.getElementById('outBtn').onclick = function () { sb.auth.signOut(); };
+    var lb = document.getElementById('libBtn'); if (lb) lb.onclick = function () { go('dishes'); };
     var en = document.getElementById('editName'); if (en) { en.onclick = function () { state.editName = true; viewMe(m); }; return; }
     document.getElementById('saveName').onclick = function () {
       var v = document.getElementById('nameIn').value.trim(); if (!v) { toast('כתוב שם קודם'); return; }
@@ -273,9 +277,11 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
   function viewSettings(m) {
     if (!isAdmin()) { go('home'); return; }
     m.innerHTML = '<h2 class="page">הגדרות</h2>' +
-      emptyBox('⚙️', 'מסכי ההגדרות ייבנו בשלב 6', 'סניפים, מחלקות וסעיפים, ספריית מנות, תבנית לקוח סמוי ומשתמשים.', '', '') +
+      '<div class="menu"><button class="btn" id="libBtn2">🍽️ ספריית מנות</button></div>' +
+      emptyBox('⚙️', 'שאר מסכי ההגדרות ייבנו בשלב 6', 'סניפים, מחלקות וסעיפים, תבנית לקוח סמוי ומשתמשים.', '', '') +
       '<h3 class="sec">סניפים במערכת</h3><div class="list">' +
       state.branches.map(function (b) { return '<div class="item"><div class="t"><b>' + esc(b.name) + '</b><small>' + (b.ownership === 'franchise' ? 'זיכיון' : 'חברה') + '</small></div></div>'; }).join('') + '</div>';
+    document.getElementById('libBtn2').onclick = function () { go('dishes'); };
   }
 
   // ---------- new audit sheet ----------
@@ -309,7 +315,7 @@ var CODE_LEN = (window.JEMS_CONFIG && window.JEMS_CONFIG.codeLength) || 8;
     loadMe(session.user).then(renderShell).catch(function () {
       // offline: use the last profile, roles and branches saved on this phone
       var c = A().loadMeta(session.user.id);
-      if (c) { state.me = c.me; state.roles = c.roles; state.branches = c.branches; state.general = c.general || {}; renderShell(); return; }
+      if (c) { state.me = c.me; state.roles = c.roles; state.branches = c.branches; state.general = c.general || {}; state.tasting = c.tasting || {}; renderShell(); return; }
       booted = null;
       h('<div class="login">' + brand() + '<div class="card">' + emptyBox('📡', 'לא הצלחנו לטעון', 'בדוק חיבור לרשת ונסה שוב.', 'נסה שוב', 'retry') + '</div></div>');
       document.getElementById('retry').onclick = function () { onSession(session); };

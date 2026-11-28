@@ -1,6 +1,6 @@
 // App shell cache. Data from Supabase is never cached here.
-var CACHE = 'jems-audit-s2-v6';
-var SHELL = ['./', 'index.html', 'style.css?v=6', 'app.js?v=6', 'config.js?v=6', 'audit.js?v=6', 'vendor/supabase.js',
+var CACHE = 'jems-audit-s3-v7';
+var SHELL = ['./', 'index.html', 'style.css?v=7', 'app.js?v=7', 'config.js?v=7', 'audit.js?v=7', 'tasting.js?v=7', 'vendor/supabase.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'icons/logo-dark-ink.png', 'icons/logo-light-ink.png', 'icons/sun-dark-ink.png', 'icons/sun-light-ink.png'];
 self.addEventListener('install', function (e) {

@@ -1,4 +1,4 @@
-/* ביקור סניף · JEM'S · 2.0 · שלב 2: ביקורת מלאה ובזק, טיוטות, עבודה בלי קליטה, ליקויים ארוכי טווח */
+/* ביקור סניף · JEM'S · 2.0 · שלב 2: ביקורת מלאה ובזק, טיוטות, עבודה בלי קליטה, ליקויים ארוכי טווח. בדיקת מנות: tasting.js */
 (function () {
   'use strict';
   var J = window.JEMS;
@@ -31,6 +31,8 @@
   function tone(s) { if (s == null) return 'none'; var c = colors(); return s >= c.green ? 'green' : s >= c.yellow ? 'yellow' : 'red'; }
   function toneEmoji(s) { return { green: '🟢', yellow: '🟡', red: '🔴', none: '⚪' }[tone(s)]; }
   function main() { return document.getElementById('main'); }
+  function T() { return window.JEMS_TASTING; } // stage 3: dish tastings live in tasting.js
+  function isT(row) { return row && row.type === 'tasting'; }
   function $(id) { return document.getElementById(id); }
 
   // ---------- phone storage ----------
@@ -228,6 +230,7 @@
     return o;
   }
   function save(row) {
+    if (isT(row)) { T().save(row); return; }
     var res = compute(row);
     row.coverage = res.coverage;
     row.result = { overall: res.overall, coverage: res.coverage, answered: res.answered, total: res.total, depts: res.depts, not_checked: res.not_checked };
@@ -238,7 +241,7 @@
   function openNew() {
     var ok = J.allowedTypes();
     if (!ok.length) { J.sheet('<h3>ביקורת חדשה</h3>' + J.noRoleBox()); return; }
-    var live = { full: 1, quick: 1 };
+    var live = { full: 1, quick: 1, tasting: 1 };
     J.sheet('<h3>איזו ביקורת?</h3><div class="types">' + J.TYPES.filter(function (t) { return ok.indexOf(t.id) >= 0; }).map(function (t) {
       return '<button class="type" data-type="' + t.id + '"' + (live[t.id] ? '' : ' disabled') + '><span class="e">' + t.e + '</span><span class="t"><b>' + t.n + '</b><small>' + t.d + '</small></span>' +
         (live[t.id] ? '' : '<span class="pill">בקרוב</span>') + '</button>';
@@ -265,8 +268,8 @@
         return '<button class="chip' + (i === guessShift(shifts) ? ' on' : '') + '" data-s="' + esc(s) + '">' + esc(s) + '</button>';
       }).join('') + '</div>' : '') +
         '<label class="field"><span>מנהל המשמרת</span><input class="input" id="mgrIn" value="' + esc(lastMgr) + '" placeholder="לא חובה" autocomplete="off"></label>' +
-        '<div class="hint-line">' + snapSummary(b, type) + '</div>' +
-        '<button class="btn btn-primary" id="goAudit">התחל ביקורת</button>' : '<p class="muted">בחר סניף כדי להמשיך.</p>'));
+        '<div class="hint-line">' + (type === 'tasting' ? T().summaryLine(b) : snapSummary(b, type)) + '</div>' +
+        '<button class="btn btn-primary" id="goAudit">' + (type === 'tasting' ? 'התחל בדיקה' : 'התחל ביקורת') + '</button>' : '<p class="muted">בחר סניף כדי להמשיך.</p>'));
     document.querySelectorAll('#brChips .chip').forEach(function (c) { c.onclick = function () { pickBranch(type, c.dataset.b); }; });
     document.querySelectorAll('#shChips .chip').forEach(function (c) {
       c.onclick = function () { document.querySelectorAll('#shChips .chip').forEach(function (x) { x.classList.toggle('on', x === c); }); };
@@ -275,7 +278,7 @@
       if (g.disabled) return; g.disabled = true; g.innerHTML = '<span class="spin"></span> פותח…';
       var sh = document.querySelector('#shChips .chip.on');
       var mgr = $('mgrIn').value.trim(); lsSet(key('lastmgr-' + bid), mgr);
-      startAudit(type, bid, sh ? sh.dataset.s : '', mgr);
+      if (type === 'tasting') T().start(bid, sh ? sh.dataset.s : '', mgr); else startAudit(type, bid, sh ? sh.dataset.s : '', mgr);
     };
   }
   function guessShift(shifts) { if (shifts.length < 2) return 0; return new Date().getHours() >= 16 ? shifts.length - 1 : 0; }
@@ -325,6 +328,7 @@
       if (row.status !== 'draft') { J.go('report', id); return; }
       if (row.created_by !== uid()) { J.go('report', id); return; }
       var e = local()[id]; if (!e) { var mm = local(); mm[id] = { row: row, rev: 0, dirty: false }; setLocal(mm); }
+      if (isT(row)) { F = null; T().form(m, row); return; }
       var startAt = (row.data.open_defects || []).length && !row.data.defects_seen ? -1 : (row.data.last_dept || 0);
       F = { row: row, dept: startAt };
       renderForm();
@@ -691,7 +695,7 @@
     return sb.from('audits').delete().eq('id', id).eq('status', 'draft').then(function () { toast('הטיוטה נמחקה'); });
   }
   function draftCard(a) {
-    var res = a.dept_snap ? compute(a) : { answered: 0, total: 0 };
+    var res = isT(a) ? T().compute(a) : a.dept_snap ? compute(a) : { answered: 0, total: 0 };
     var pct = res.total ? Math.round(res.answered / res.total * 100) : 0;
     var old = Date.now() - new Date(a.started_at).getTime() > 7 * DAY;
     var e = local()[a.id];
@@ -736,7 +740,7 @@
       });
       el.querySelectorAll('[data-part]').forEach(function (x) {
         x.onclick = function () {
-          getAudit(x.dataset.part).then(function (row) { if (!row) return; F = { row: row, dept: 0 }; openPartial(false); });
+          getAudit(x.dataset.part).then(function (row) { if (!row) return; if (isT(row)) { T().partial(row); return; } F = { row: row, dept: 0 }; openPartial(false); });
         };
       });
     }
@@ -775,6 +779,7 @@
   }
   function scorePill(a) {
     if (a.status === 'draft') return '<span class="pill">בעבודה</span>';
+    if (isT(a)) return T().pill(a);
     var s = a.result && a.result.overall;
     return '<span class="pills">' + (a.status === 'partial' ? '<span class="pill pill-warn">חלקית</span>' : '') +
       (a.not_representative ? '<span class="pill">לא מייצגת</span>' : '') +
@@ -787,6 +792,7 @@
     getAudit(id).then(function (a) {
       if (!a) { m.innerHTML = J.emptyBox('🔍', 'הביקורת לא נמצאה', 'אולי אין לך הרשאה אליה, או שאין חיבור לרשת.', 'חזרה לבית', 'backHome'); $('backHome').onclick = function () { J.go('home'); }; return; }
       if (a.status === 'draft' && a.created_by === uid()) { J.go('audit', id); return; }
+      if (isT(a)) { T().report(m, a); return; }
       renderReport(m, a);
     });
   }
@@ -970,6 +976,10 @@
     views: { audit: viewAudit, report: viewReport, defects: viewDefects },
     openNew: openNew, home: home, bindOpen: bindOpen, scorePill: scorePill, start: start, sync: sync,
     saveMeta: saveMeta, loadMeta: loadMeta,
+    // shared with tasting.js
+    _i: { store: store, cloudRow: cloudRow, local: local, setLocal: setLocal, uuid: uuid, compress: compress, idbPut: idbPut, idbDel: idbDel, photoq: photoq, setPhotoq: setPhotoq,
+      loadThumbs: loadThumbs, photoUrl: photoUrl, copy: copy, pendingCount: pendingCount, syncBadge: syncBadge, branch: branch, lsGet: lsGet, lsSet: lsSet, key: key,
+      dmy: dmy, hm: hm, dm: dm, fmt1: fmt1, r1: r1, getAudit: getAudit, minCov: minCov, REASONS: REASONS, uid: uid, clone: clone, sync: sync },
     // exposed for tests
     _compute: compute, _buildSnap: buildSnap, _waText: waText
   };
